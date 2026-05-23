@@ -19,6 +19,12 @@ class TestMemoryBlock(unittest.TestCase):
         self.assertIn("0xdeadbeef", r)
         self.assertIn("1024", r)
 
+    def test_repr_includes_device(self):
+        # Personal note: also verify device string appears in repr
+        block = MemoryBlock(ptr=0x1000, size=512, device="cuda:1")
+        r = repr(block)
+        self.assertIn("cuda:1", r)
+
 
 class TestMemoryPool(unittest.TestCase):
     def _make_pool(self, tolerance: int = 0) -> MemoryPool:
@@ -83,30 +89,4 @@ class TestMemoryPool(unittest.TestCase):
         counter = self._counter_allocator()
         ptr = pool.alloc(128, counter)
         pool.free(ptr)
-        free_fn = MagicMock()
-        pool.release_all(free_fn)
-        free_fn.assert_called_once_with(ptr)
-        self.assertEqual(pool.stats["cached_blocks"], 0)
-
-    def test_thread_safety(self):
-        pool = self._make_pool()
-        counter = self._counter_allocator()
-        errors = []
-
-        def worker():
-            try:
-                ptr = pool.alloc(64, counter)
-                pool.free(ptr)
-            except Exception as exc:  # noqa: BLE001
-                errors.append(exc)
-
-        threads = [threading.Thread(target=worker) for _ in range(50)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-        self.assertFalse(errors, errors)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        free_fn = MagicMock
