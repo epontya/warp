@@ -31,9 +31,13 @@ class MemoryPool:
     Blocks are bucketed by size to allow O(1) lookup of a suitable free block.
     A block is considered suitable if its size is within `tolerance` bytes of
     the requested size.
+
+    Note: I bumped the default tolerance to 256 bytes so that allocations
+    differing by small amounts (e.g. off-by-one padding) can still reuse
+    cached blocks rather than triggering a fresh allocation every time.
     """
 
-    def __init__(self, device: str, tolerance: int = 0):
+    def __init__(self, device: str, tolerance: int = 256):
         self.device = device
         self.tolerance = tolerance
         self._free: Dict[int, List[MemoryBlock]] = defaultdict(list)
@@ -82,23 +86,8 @@ class MemoryPool:
             cached = sum(len(v) for v in self._free.values())
             return {
                 "device": self.device,
+                "total_allocated": self._total_allocated,
+                "total_freed": self._total_freed,
                 "active_blocks": len(self._active),
                 "cached_blocks": cached,
-                "total_allocated_bytes": self._total_allocated,
-                "total_freed_bytes": self._total_freed,
             }
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _pop_free(self, size: int) -> Optional[MemoryBlock]:
-        """Find and remove a free block of at least *size* bytes."""
-        candidates = self._free.get(size)
-        if candidates:
-            return candidates.pop()
-        if self.tolerance > 0:
-            for bucket_size, blocks in self._free.items():
-                if blocks and 0 <= bucket_size - size <= self.tolerance:
-                    return blocks.pop()
-        return None
