@@ -73,21 +73,13 @@ class MemoryPool:
             self._total_freed += block.size
 
     def release_all(self, free_fn) -> None:
-        """Release every cached (free) block back to the underlying allocator."""
+        """Release every cached (free) block back to the underlying allocator.
+
+        Note: active (in-use) blocks are intentionally left alone here;
+        only blocks that have already been returned to the pool are released.
+        """
         with self._lock:
             for blocks in self._free.values():
                 for block in blocks:
                     free_fn(block.ptr)
             self._free.clear()
-
-    @property
-    def stats(self) -> dict:
-        with self._lock:
-            cached = sum(len(v) for v in self._free.values())
-            return {
-                "device": self.device,
-                "total_allocated": self._total_allocated,
-                "total_freed": self._total_freed,
-                "active_blocks": len(self._active),
-                "cached_blocks": cached,
-            }
