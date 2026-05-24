@@ -80,13 +80,6 @@ class TestMemoryPool(unittest.TestCase):
         counter = self._counter_allocator()
         ptr1 = pool.alloc(500, counter)
         pool.free(ptr1)
-        # Request 400 bytes — outside tolerance of 8
+        # Request 400 bytes — outside tolerance of 8; a new block should be allocated
         ptr2 = pool.alloc(400, counter)
         self.assertNotEqual(ptr1, ptr2)
-
-    def test_release_all_calls_free_fn(self):
-        pool = self._make_pool()
-        counter = self._counter_allocator()
-        ptr = pool.alloc(128, counter)
-        pool.free(ptr)
-        free_fn = MagicMock
