@@ -51,9 +51,16 @@ class MemoryPool:
     a cap, long-running simulations can accumulate hundreds of stale blocks that
     never get reused, slowly inflating RSS. A cap of 32 per bucket feels generous
     enough to absorb burst patterns while keeping memory usage predictable.
+
+    Personal note 4: Bumped `max_cached_blocks` default from 32 to 64. Running
+    my cloth simulation benchmark overnight I noticed the pool was evicting blocks
+    too aggressively at 32 — the evicted blocks would get re-allocated a few frames
+    later, causing small but consistent allocation spikes. 64 keeps the burst
+    absorption benefit without meaningfully increasing peak RSS in my tests.
+    Still setting tolerance at 128; that part feels solid.
     """
 
-    def __init__(self, device: str, tolerance: int = 128, max_cached_blocks: int = 32):
+    def __init__(self, device: str, tolerance: int = 128, max_cached_blocks: int = 64):
         self.device = device
         self.tolerance = tolerance
         # Max number of free blocks to keep per size bucket before discarding.
@@ -66,18 +73,4 @@ class MemoryPool:
 
     # ------------------------------------------------------------------
     # Public API
-    # ------------------------------------------------------------------
-
-    def alloc(self, size: int, allocator_fn) -> int:
-        """Return a pointer to *size* bytes, reusing a cached block if possible."""
-        with self._lock:
-            block = self._pop_free(size)
-            if block is None:
-                ptr = allocator_fn(size)
-                block = MemoryBlock(ptr=ptr, size=size, device=self.device)
-                self._total_allocated += size
-            block.in_use = True
-            self._active[block.ptr] = block
-            return block.ptr
-
-    def free(sel
+    # ----------------------
