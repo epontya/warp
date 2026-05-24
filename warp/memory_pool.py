@@ -68,17 +68,27 @@ class MemoryPool:
             return block.ptr
 
     def free(self, ptr: int, free_fn=None) -> None:
-        """Return the block identified by *ptr* to the pool."""
+        """Return the block identified by *ptr* to the pool.
+
+        If *free_fn* is provided and the pool has accumulated more free blocks
+        than `_max_free_blocks`, the block is released immediately instead of
+        being cached. This helps avoid unbounded memory growth during long runs.
+        """
         with self._lock:
             block = self._active.pop(ptr, None)
             if block is None:
                 raise KeyError(f"Pointer {ptr:#x} is not managed by this pool")
             block.in_use = False
-            self._free[block.size].append(block)
-            self._total_freed += block.size
+            # If a free_fn is supplied and we're holding too many idle blocks,
+            # release this one immediately rather than caching it.
+            free_blocks_for_size = self._free[block.size]
+            if free_fn is not None and len(free_blocks_for_size) >= self._max_free_blocks:
+                self._total_freed += block.size
+                free_fn(ptr)
+            else:
+                free_blocks_for_size.append(block)
 
-    def release_all(self, free_fn) -> None:
-        """Release every cached (free) block back to the underlying allocator.
-
-        Note: active (in-use) blocks are intentionally left alone here;
-    
+    # Maximum number of free blocks to retain per size bucket before
+    # releasing back to the underlying allocator.
+    # Personal note: set to 4 — seems generous enough without hoarding memory.
+    _max_free_blocks: int = 4
