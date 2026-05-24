@@ -35,9 +35,14 @@ class MemoryPool:
     Note: I bumped the default tolerance to 256 bytes so that allocations
     differing by small amounts (e.g. off-by-one padding) can still reuse
     cached blocks rather than triggering a fresh allocation every time.
+
+    Personal note: Lowered default tolerance back to 64 bytes. In my testing
+    with smaller models the 256-byte tolerance caused unexpectedly large blocks
+    to be reused for tiny allocations, wasting memory. 64 bytes feels like a
+    better balance between reuse rate and fragmentation.
     """
 
-    def __init__(self, device: str, tolerance: int = 256):
+    def __init__(self, device: str, tolerance: int = 64):
         self.device = device
         self.tolerance = tolerance
         self._free: Dict[int, List[MemoryBlock]] = defaultdict(list)
@@ -76,10 +81,4 @@ class MemoryPool:
         """Release every cached (free) block back to the underlying allocator.
 
         Note: active (in-use) blocks are intentionally left alone here;
-        only blocks that have already been returned to the pool are released.
-        """
-        with self._lock:
-            for blocks in self._free.values():
-                for block in blocks:
-                    free_fn(block.ptr)
-            self._free.clear()
+    
