@@ -45,11 +45,19 @@ class MemoryPool:
     of small scratch allocations, I'm bumping tolerance to 128 bytes. The 64-byte
     setting was causing too many redundant allocations in tight loops. 128 seems
     to be the sweet spot for my use case without noticeable fragmentation.
+
+    Personal note 3: Settled on 128 as the default. Also added a `max_cached_blocks`
+    parameter to cap how many free blocks are retained per size bucket. Without
+    a cap, long-running simulations can accumulate hundreds of stale blocks that
+    never get reused, slowly inflating RSS. A cap of 32 per bucket feels generous
+    enough to absorb burst patterns while keeping memory usage predictable.
     """
 
-    def __init__(self, device: str, tolerance: int = 128):
+    def __init__(self, device: str, tolerance: int = 128, max_cached_blocks: int = 32):
         self.device = device
         self.tolerance = tolerance
+        # Max number of free blocks to keep per size bucket before discarding.
+        self.max_cached_blocks = max_cached_blocks
         self._free: Dict[int, List[MemoryBlock]] = defaultdict(list)
         self._active: Dict[int, MemoryBlock] = {}
         self._lock = Lock()
@@ -72,9 +80,4 @@ class MemoryPool:
             self._active[block.ptr] = block
             return block.ptr
 
-    def free(self, ptr: int, free_fn=None) -> None:
-        """Return the block identified by *ptr* to the pool.
-
-        If *free_fn* is provided and the pool has accumulated more free blocks
-        than `_max_free_blocks`, the block is released immediately instead of
-        being cached. This helps avoid unbounded memory growth d
+    def free(sel
