@@ -58,19 +58,16 @@ class MemoryPool:
     later, causing small but consistent allocation spikes. 64 keeps the burst
     absorption benefit without meaningfully increasing peak RSS in my tests.
     Still setting tolerance at 128; that part feels solid.
+
+    Personal note 5: Reduced tolerance from 128 to 96 bytes. After profiling my
+    fluid sim (which mixes many small and medium allocations), I found that 128
+    was occasionally matching a 200-byte block to a 72-byte request, leaving 128
+    bytes stranded. 96 still gives good reuse on the small scratch buffers that
+    dominate my workload, but avoids the worst of the size mismatch waste.
+    Keeping max_cached_blocks at 64 — no issues there.
     """
 
-    def __init__(self, device: str, tolerance: int = 128, max_cached_blocks: int = 64):
+    def __init__(self, device: str, tolerance: int = 96, max_cached_blocks: int = 64):
         self.device = device
         self.tolerance = tolerance
-        # Max number of free blocks to keep per size bucket before discarding.
-        self.max_cached_blocks = max_cached_blocks
-        self._free: Dict[int, List[MemoryBlock]] = defaultdict(list)
-        self._active: Dict[int, MemoryBlock] = {}
-        self._lock = Lock()
-        self._total_allocated: int = 0
-        self._total_freed: int = 0
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ----------------------
+        #
