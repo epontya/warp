@@ -80,7 +80,8 @@ class TestMemoryPool(unittest.TestCase):
         counter = self._counter_allocator()
         ptr1 = pool.alloc(500, counter)
         pool.free(ptr1)
-        # Request 400 bytes — outside tolerance of 8; a new block should be allocated
-        # Note: ptr2 should differ from ptr1 since the freed block doesn't fit
+        # Request 400 bytes — outside tolerance of 8; a new block should be allocated.
+        # The size difference (100) exceeds the tolerance (8), so a fresh allocation
+        # must happen and ptr2 should differ from ptr1.
         ptr2 = pool.alloc(400, counter)
         self.assertNotEqual(ptr1, ptr2)
