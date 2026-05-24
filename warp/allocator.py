@@ -65,6 +65,20 @@ class Allocator:
         del self._active_blocks[key]
         self._pool.free(block)
 
+    def free_all(self) -> int:
+        """Free all currently active blocks tracked by this allocator.
+
+        Useful for bulk cleanup without needing to track individual blocks.
+
+        Returns:
+            The number of blocks that were freed.
+        """
+        # Snapshot the keys so we're not modifying the dict while iterating
+        blocks = list(self._active_blocks.values())
+        for block in blocks:
+            self.free(block)
+        return len(blocks)
+
     @property
     def active_count(self) -> int:
         """Number of blocks currently allocated and not yet freed."""
@@ -91,31 +105,4 @@ class ScopedMemoryTracker:
             # block is freed automatically when the context exits
 
     Args:
-        allocator: The :class:`Allocator` whose allocations should be tracked.
-    """
-
-    def __init__(self, allocator: Allocator) -> None:
-        self._allocator = allocator
-        self._tracked: list[MemoryBlock] = []
-
-    def track(self, block: MemoryBlock) -> MemoryBlock:
-        """Register *block* for automatic cleanup on scope exit.
-
-        Returns the same block for convenient inline use::
-
-            block = tracker.track(allocator.alloc(256))
-        """
-        self._tracked.append(block)
-        return block
-
-    def __enter__(self) -> "ScopedMemoryTracker":
-        return self
-
-    def __exit__(self, *_exc) -> None:
-        for block in reversed(self._tracked):
-            try:
-                self._allocator.free(block)
-            except KeyError:
-                # Block was already freed manually — that is fine.
-                pass
-        self._tracked.clear()
+        allocator:
