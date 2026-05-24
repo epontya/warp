@@ -40,9 +40,14 @@ class MemoryPool:
     with smaller models the 256-byte tolerance caused unexpectedly large blocks
     to be reused for tiny allocations, wasting memory. 64 bytes feels like a
     better balance between reuse rate and fragmentation.
+
+    Personal note 2: After more testing with simulation workloads that do lots
+    of small scratch allocations, I'm bumping tolerance to 128 bytes. The 64-byte
+    setting was causing too many redundant allocations in tight loops. 128 seems
+    to be the sweet spot for my use case without noticeable fragmentation.
     """
 
-    def __init__(self, device: str, tolerance: int = 64):
+    def __init__(self, device: str, tolerance: int = 128):
         self.device = device
         self.tolerance = tolerance
         self._free: Dict[int, List[MemoryBlock]] = defaultdict(list)
@@ -72,23 +77,4 @@ class MemoryPool:
 
         If *free_fn* is provided and the pool has accumulated more free blocks
         than `_max_free_blocks`, the block is released immediately instead of
-        being cached. This helps avoid unbounded memory growth during long runs.
-        """
-        with self._lock:
-            block = self._active.pop(ptr, None)
-            if block is None:
-                raise KeyError(f"Pointer {ptr:#x} is not managed by this pool")
-            block.in_use = False
-            # If a free_fn is supplied and we're holding too many idle blocks,
-            # release this one immediately rather than caching it.
-            free_blocks_for_size = self._free[block.size]
-            if free_fn is not None and len(free_blocks_for_size) >= self._max_free_blocks:
-                self._total_freed += block.size
-                free_fn(ptr)
-            else:
-                free_blocks_for_size.append(block)
-
-    # Maximum number of free blocks to retain per size bucket before
-    # releasing back to the underlying allocator.
-    # Personal note: set to 4 — seems generous enough without hoarding memory.
-    _max_free_blocks: int = 4
+        being cached. This helps avoid unbounded memory growth d
